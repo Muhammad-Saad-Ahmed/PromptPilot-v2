@@ -49,7 +49,7 @@ Make sure the response is in pure JSON format matching the schema requested.`;
       model: "gemini-2.5-flash",
       contents: userPrompt,
       config: {
-        systemInstruction: `Analyze and return JSON: goal, topic, skillLevel, outputType, constraints, missingInformation, refinedPrompt, qualityScore, metrics, impacts, assignmentEvaluation. Rules: ${rulesText}`,
+        systemInstruction: systemInstruction,
         responseMimeType: "application/json"
       }
     });
