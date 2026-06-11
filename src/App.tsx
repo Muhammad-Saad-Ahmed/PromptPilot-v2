@@ -176,8 +176,16 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "Failed to generate specialized prompt.");
+        let errorMessage = "Failed to generate specialized prompt.";
+        try {
+          const errData = await res.json();
+          errorMessage = errData.error || errorMessage;
+        } catch (e) {
+          // If JSON parsing fails, the server might have returned a text error
+          const textError = await res.text();
+          errorMessage = textError || `Server error (${res.status}): ${res.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       // Read extracted attributes payload
@@ -209,8 +217,15 @@ export default function App() {
         });
 
         if (!simRes.ok) {
-          const simErr = await simRes.json();
-          throw new Error(simErr.error || "Simulator diagnostic run failed.");
+          let simErrorMessage = "Simulator diagnostic run failed.";
+          try {
+            const simErr = await simRes.json();
+            simErrorMessage = simErr.error || simErrorMessage;
+          } catch (e) {
+            const simTextError = await simRes.text();
+            simErrorMessage = simTextError || `Simulator error (${simRes.status}): ${simRes.statusText}`;
+          }
+          throw new Error(simErrorMessage);
         }
 
         const simData: TestRunResponse = await simRes.json();

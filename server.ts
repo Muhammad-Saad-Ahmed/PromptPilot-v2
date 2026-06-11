@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
 // Load environment variables dynamically from .env file
@@ -16,17 +15,12 @@ app.use(express.json());
 // Initialize GoogleGenAI client using secure backend-only GEMINI_API_KEY
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
-  console.warn("Waring: GEMINI_API_KEY is not defined in environment variables. Gemini features may fail.");
+  console.warn("Warning: GEMINI_API_KEY is not defined in environment variables. Gemini features may fail.");
 }
 
 // Global API service client linked with Google AI Developer Studio Platform
 const ai = new GoogleGenAI({
   apiKey: apiKey || "",
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build', // For compliance auditing
-    }
-  }
 });
 
 // Middleware to log API requests with custom timestamps for debug operations
@@ -99,29 +93,29 @@ Selected Target Mode: "${selectedMode}" (Generate the prompt suitable for a ${se
 Generate the JSON response matching the specifications. Keep the tone friendly, encouraging, and clear.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: userPrompt,
       config: {
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           required: [
             "goal", "topic", "skillLevel", "outputType", "constraints", 
             "missingInformation", "refinedPrompt", "qualityScore", "metrics", 
             "impacts", "assignmentEvaluation"
           ],
           properties: {
-            goal: { type: Type.STRING },
-            topic: { type: Type.STRING },
-            skillLevel: { type: Type.STRING },
-            outputType: { type: Type.STRING },
-            constraints: { type: Type.STRING },
-            missingInformation: { type: Type.ARRAY, items: { type: Type.STRING } },
-            refinedPrompt: { type: Type.STRING, description: "The copyable optimized markdown prompt incorporating the 8 rules." },
-            qualityScore: { type: Type.INTEGER },
+            goal: { type: "STRING" },
+            topic: { type: "STRING" },
+            skillLevel: { type: "STRING" },
+            outputType: { type: "STRING" },
+            constraints: { type: "STRING" },
+            missingInformation: { type: "ARRAY", items: { type: "STRING" } },
+            refinedPrompt: { type: "STRING", description: "The copyable optimized markdown prompt incorporating the 8 rules." },
+            qualityScore: { type: "INTEGER" },
             metrics: {
-              type: Type.OBJECT,
+              type: "OBJECT",
               required: [
                 "goalClarityUser", "goalClarityGenerated",
                 "contextUser", "contextGenerated",
@@ -130,39 +124,39 @@ Generate the JSON response matching the specifications. Keep the tone friendly, 
                 "successCriteriaUser", "successCriteriaGenerated"
               ],
               properties: {
-                goalClarityUser: { type: Type.INTEGER },
-                goalClarityGenerated: { type: Type.INTEGER },
-                contextUser: { type: Type.INTEGER },
-                contextGenerated: { type: Type.INTEGER },
-                outputFormatUser: { type: Type.INTEGER },
-                outputFormatGenerated: { type: Type.INTEGER },
-                constraintsUser: { type: Type.INTEGER },
-                constraintsGenerated: { type: Type.INTEGER },
-                successCriteriaUser: { type: Type.INTEGER },
-                successCriteriaGenerated: { type: Type.INTEGER }
+                goalClarityUser: { type: "INTEGER" },
+                goalClarityGenerated: { type: "INTEGER" },
+                contextUser: { type: "INTEGER" },
+                contextGenerated: { type: "INTEGER" },
+                outputFormatUser: { type: "INTEGER" },
+                outputFormatGenerated: { type: "INTEGER" },
+                constraintsUser: { type: "INTEGER" },
+                constraintsGenerated: { type: "INTEGER" },
+                successCriteriaUser: { type: "INTEGER" },
+                successCriteriaGenerated: { type: "INTEGER" }
               }
             },
             impacts: {
-              type: Type.ARRAY,
+              type: "ARRAY",
               items: {
-                type: Type.OBJECT,
+                type: "OBJECT",
                 required: ["missing", "impact"],
                 properties: {
-                  missing: { type: Type.STRING, description: "e.g., Missing Context" },
-                  impact: { type: Type.STRING, description: "e.g., AI does not know your level. Impact: Response may be too advanced." }
+                  missing: { type: "STRING", description: "e.g., Missing Context" },
+                  impact: { type: "STRING", description: "e.g., AI does not know your level. Impact: Response may be too advanced." }
                 }
               }
             },
             assignmentEvaluation: {
-              type: Type.OBJECT,
+              type: "OBJECT",
               required: ["creativity", "realWorldProblem", "aiUsage", "documentation", "difficulty", "overall"],
               properties: {
-                creativity: { type: Type.NUMBER },
-                realWorldProblem: { type: Type.NUMBER },
-                aiUsage: { type: Type.NUMBER },
-                documentation: { type: Type.NUMBER },
-                difficulty: { type: Type.NUMBER },
-                overall: { type: Type.NUMBER }
+                creativity: { type: "NUMBER" },
+                realWorldProblem: { type: "NUMBER" },
+                aiUsage: { type: "NUMBER" },
+                documentation: { type: "NUMBER" },
+                difficulty: { type: "NUMBER" },
+                overall: { type: "NUMBER" }
               }
             }
           }
@@ -199,7 +193,7 @@ app.post("/api/test-run", async (req, res) => {
     // STEP 1: Basic default helper setup (Answers directly, copy-paste format, no learning loop)
     const novicePrompt = `Please answer a student's simple question directly. Do not overthink, just answer like a basic bot. Question: "${rawInput}"`;
     const noviceResponse = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: novicePrompt,
       config: {
         systemInstruction: "You are a basic helpful AI helper. Give a brief, high-level copy-paste response."
@@ -208,7 +202,7 @@ app.post("/api/test-run", async (req, res) => {
 
     // STEP 2: Socratic refined pilot setup (Using the copy-ready prompt containing rules, checks & bounds)
     const refinedResponse = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: refinedPrompt,
     });
 
@@ -254,6 +248,7 @@ app.get("/api/download-python", async (req, res) => {
 // Configure Vite or Static Assets serving
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
