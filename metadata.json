@@ -1,0 +1,6 @@
+{
+  "name": "PromptPilot AI — Intelligent Prompt Generator & Evaluator",
+  "description": "An intelligent, high-fidelity prompt refinement engine that converts raw intentions into optimized prompts based on 8 rules, offering scores, impact analysis, and evaluation benchmarks.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
