@@ -31,20 +31,21 @@ app.use((req, res, next) => {
 
 
 // Endpoint 1: Generate & Refine Prompt (Raw Intent convert karne ke liye main API)
-// Yeh API client se rawInput, Selected Mode (Beginner/Intermediate/Expert), aur current customRules list leti hai.
-// Aur Gemini model ko strict JSON response schema ke sath query karti hai.
 app.post("/api/generate", async (req, res) => {
   try {
     const { rawInput, mode, customRules } = req.body;
     const selectedMode = mode || "Intermediate";
+
+    if (!apiKey) {
+      console.error("CRITICAL: GEMINI_API_KEY is missing in environment variables.");
+      return res.status(500).json({ error: "Server Configuration Error: API Key is missing. Please set GEMINI_API_KEY in Vercel settings." });
+    }
 
     if (!rawInput) {
       return res.status(400).json({ error: "Input is required to generate a prompt." });
     }
 
     // Dynamic prompt construction rules compiler:
-    // Hum rules book modal se custom rule set retrieve karte hain jise hum structured string mein generate karte hain.
-    // Agar rules book khaali ho tou fallback default standard rules apply kardiye jaate hain.
     let rulesText = "";
     if (Array.isArray(customRules) && customRules.length > 0) {
       rulesText = customRules.map((r: any, index: number) => {
@@ -92,6 +93,8 @@ Selected Target Mode: "${selectedMode}" (Generate the prompt suitable for a ${se
 
 Generate the JSON response matching the specifications. Keep the tone friendly, encouraging, and clear.`;
 
+    console.log(`Generating prompt for input: "${rawInput.substring(0, 50)}..."`);
+
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: userPrompt,
@@ -112,7 +115,7 @@ Generate the JSON response matching the specifications. Keep the tone friendly, 
             outputType: { type: "STRING" },
             constraints: { type: "STRING" },
             missingInformation: { type: "ARRAY", items: { type: "STRING" } },
-            refinedPrompt: { type: "STRING", description: "The copyable optimized markdown prompt incorporating the 8 rules." },
+            refinedPrompt: { type: "STRING" },
             qualityScore: { type: "INTEGER" },
             metrics: {
               type: "OBJECT",
@@ -142,8 +145,8 @@ Generate the JSON response matching the specifications. Keep the tone friendly, 
                 type: "OBJECT",
                 required: ["missing", "impact"],
                 properties: {
-                  missing: { type: "STRING", description: "e.g., Missing Context" },
-                  impact: { type: "STRING", description: "e.g., AI does not know your level. Impact: Response may be too advanced." }
+                  missing: { type: "STRING" },
+                  impact: { type: "STRING" }
                 }
               }
             },
@@ -164,33 +167,45 @@ Generate the JSON response matching the specifications. Keep the tone friendly, 
       }
     });
 
-    const resultText = response.text;
+    // In some cases, response.text might be a method, in others a property
+    const resultText = typeof response.text === 'function' ? (response as any).text() : response.text;
+    
     if (!resultText) {
+      console.error("Empty response from Gemini API");
       throw new Error("No text returned from Gemini API");
     }
 
-    const parsedResult = JSON.parse(resultText);
-    res.json(parsedResult);
+    try {
+      const parsedResult = JSON.parse(resultText);
+      res.json(parsedResult);
+    } catch (parseError) {
+      console.error("Failed to parse Gemini response as JSON:", resultText);
+      throw new Error("Invalid JSON response from AI model.");
+    }
+    
   } catch (error: any) {
-    console.error("Error generating prompt:", error);
-    res.status(500).json({ error: error.message || "Failed to generate prompt." });
+    console.error("Error in /api/generate:", error);
+    res.status(500).json({ error: error.message || "Internal Server Error during prompt generation." });
   }
 });
 
 // Endpoint 2: Test Run Prompt (Novice vs Refined Demo Outputs Simulator API)
-// Yeh API side-by-side terminal comparison generate karti hai.
-// Yeh do simultaneous calls chalati hai:
-// 1. standard basic bot (novice) response raw query par.
-// 2. Optimized prompt response jo high-quality Socratic lesson parameters ke sath answer kare ga.
 app.post("/api/test-run", async (req, res) => {
   try {
     const { rawInput, refinedPrompt } = req.body;
+
+    if (!apiKey) {
+      console.error("CRITICAL: GEMINI_API_KEY is missing in environment variables for test-run.");
+      return res.status(500).json({ error: "Server Configuration Error: API Key is missing." });
+    }
 
     if (!rawInput || !refinedPrompt) {
       return res.status(400).json({ error: "Both raw input and refined prompt are required for the test run." });
     }
 
-    // STEP 1: Basic default helper setup (Answers directly, copy-paste format, no learning loop)
+    console.log("Starting side-by-side simulation...");
+
+    // STEP 1: Basic default helper setup
     const novicePrompt = `Please answer a student's simple question directly. Do not overthink, just answer like a basic bot. Question: "${rawInput}"`;
     const noviceResponse = await ai.models.generateContent({
       model: "gemini-2.0-flash",
@@ -200,20 +215,23 @@ app.post("/api/test-run", async (req, res) => {
       }
     });
 
-    // STEP 2: Socratic refined pilot setup (Using the copy-ready prompt containing rules, checks & bounds)
+    // STEP 2: Socratic refined pilot setup
     const refinedResponse = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: refinedPrompt,
     });
 
+    const noviceText = typeof noviceResponse.text === 'function' ? (noviceResponse as any).text() : noviceResponse.text;
+    const refinedText = typeof refinedResponse.text === 'function' ? (refinedResponse as any).text() : refinedResponse.text;
+
     // Return comparative outputs to client terminal screens
     res.json({
-      noviceOutput: noviceResponse.text,
-      refinedOutput: refinedResponse.text,
+      noviceOutput: noviceText || "No response from basic model.",
+      refinedOutput: refinedText || "No response from refined model.",
     });
 
   } catch (error: any) {
-    console.error("Error executing test run:", error);
+    console.error("Error in /api/test-run:", error);
     res.status(500).json({ error: error.message || "Failed to perform comparison test run." });
   }
 });
