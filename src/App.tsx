@@ -177,13 +177,12 @@ export default function App() {
 
       if (!res.ok) {
         let errorMessage = "Failed to generate specialized prompt.";
+        const errorText = await res.text();
         try {
-          const errData = await res.json();
+          const errData = JSON.parse(errorText);
           errorMessage = errData.error || errorMessage;
         } catch (e) {
-          // If JSON parsing fails, the server might have returned a text error
-          const textError = await res.text();
-          errorMessage = textError || `Server error (${res.status}): ${res.statusText}`;
+          errorMessage = errorText || `Server error (${res.status}): ${res.statusText}`;
         }
         throw new Error(errorMessage);
       }
@@ -218,12 +217,12 @@ export default function App() {
 
         if (!simRes.ok) {
           let simErrorMessage = "Simulator diagnostic run failed.";
+          const simErrorText = await simRes.text();
           try {
-            const simErr = await simRes.json();
+            const simErr = JSON.parse(simErrorText);
             simErrorMessage = simErr.error || simErrorMessage;
           } catch (e) {
-            const simTextError = await simRes.text();
-            simErrorMessage = simTextError || `Simulator error (${simRes.status}): ${simRes.statusText}`;
+            simErrorMessage = simErrorText || `Simulator error (${simRes.status}): ${simRes.statusText}`;
           }
           throw new Error(simErrorMessage);
         }
