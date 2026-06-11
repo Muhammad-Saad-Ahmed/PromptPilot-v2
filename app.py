@@ -32,16 +32,37 @@ st.caption("Portable Standalone Python Sandbox — Powered by Gemini 2.5/3.5")
 # Secure API Key Setup (System Environment check for GCP Cloud Run)
 # --------------------------------------------------------------------------
 api_key = os.environ.get("GEMINI_API_KEY", "")
+fallback_api_key = os.environ.get("FALLBACK_GEMINI_API_KEY", "")
+fallback_model = os.environ.get("FALLBACK_GEMINI_MODEL", "gemini-1.5-flash-lite")
 
 client = None
+fallback_client = None
+
 if api_key:
     try:
-        # Load modern SDK client matching Google GenAI specifications
         client = genai.Client(api_key=api_key)
     except Exception as e:
         logger.error(f"Error initializing Gemini client: {e}")
-        st.error(f"Could not initialize Gemini Client: {e}")
-else:
+
+if fallback_api_key:
+    try:
+        fallback_client = genai.Client(api_key=fallback_api_key)
+    except Exception as e:
+        logger.error(f"Error initializing Fallback Gemini client: {e}")
+
+def call_gemini_with_fallback(model, contents, config):
+    try:
+        if not client:
+            raise Exception("Primary client not initialized")
+        return client.models.generate_content(model=model, contents=contents, config=config)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if ("429" in error_msg or "quota" in error_msg) and fallback_client:
+            st.warning(f"⚠️ Primary API Quota Exceeded. Switching to fallback model: {fallback_model}")
+            return fallback_client.models.generate_content(model=fallback_model, contents=contents, config=config)
+        raise e
+
+if not api_key and not fallback_api_key:
     st.info("💡 **Security Tip:** Run without credentials locally by setting `GEMINI_API_KEY` in your `.env` or system environment.")
 
 # --------------------------------------------------------------------------
@@ -98,7 +119,7 @@ with col_output:
     st.markdown("### 📋 Refined Assistant Prompt")
     
     if generate_trigger and raw_text.strip():
-        if not client:
+        if not client and not fallback_client:
             st.error("🔒 SECURE KEY REQUESTED: Setup a `GEMINI_API_KEY` to query live models.")
         else:
             with st.spinner("Generating refined prompt with Socratic boundaries..."):
@@ -128,7 +149,7 @@ You MUST analyze the input and extract:
                         "missingInformation (array), refinedPrompt, qualityScore, metrics, impacts, assignmentEvaluation"
                     )
 
-                    response = client.models.generate_content(
+                    response = call_gemini_with_fallback(
                         model='gemini-2.5-flash',
                         contents=prompt_request,
                         config=types.GenerateContentConfig(

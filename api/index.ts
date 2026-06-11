@@ -9,13 +9,38 @@ const app = express();
 app.use(express.json());
 
 const apiKey = process.env.GEMINI_API_KEY;
+const fallbackApiKey = process.env.FALLBACK_GEMINI_API_KEY;
+const fallbackModel = process.env.FALLBACK_GEMINI_MODEL || "gemini-1.5-flash-lite";
+
 const ai = new GoogleGenAI({ apiKey: apiKey || "" });
+const fallbackAi = fallbackApiKey ? new GoogleGenAI({ apiKey: fallbackApiKey }) : null;
+
+// Helper to call Gemini with Fallback Logic
+async function callGemini(params: any) {
+  try {
+    if (!apiKey) throw new Error("Primary API Key missing");
+    return await ai.models.generateContent(params);
+  } catch (error: any) {
+    const isQuotaError = error.message?.includes("429") || 
+                         error.message?.includes("quota") || 
+                         error.status === 429;
+    
+    if (isQuotaError && fallbackAi) {
+      console.warn(`[FALLBACK] Primary API Quota Exceeded. Switching to model: ${fallbackModel}`);
+      return await fallbackAi.models.generateContent({
+        ...params,
+        model: fallbackModel
+      });
+    }
+    throw error;
+  }
+}
 
 // API Endpoint: Generate
 app.post("/api/generate", async (req, res) => {
   try {
     const { rawInput, mode, customRules } = req.body;
-    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY is missing." });
+    if (!apiKey && !fallbackApiKey) return res.status(500).json({ error: "GEMINI_API_KEY is missing." });
     if (!rawInput) return res.status(400).json({ error: "Input is required." });
 
     let rulesText = Array.isArray(customRules) && customRules.length > 0 
@@ -45,7 +70,7 @@ ${rulesText}
 Make sure the response is in pure JSON format matching the schema requested.`;
     const userPrompt = `Student Intention: "${rawInput}"\nMode: "${mode || "Intermediate"}"`;
 
-    const response = await ai.models.generateContent({
+    const response = await callGemini({
       model: "gemini-2.5-flash",
       contents: userPrompt,
       config: {
@@ -65,15 +90,15 @@ Make sure the response is in pure JSON format matching the schema requested.`;
 app.post("/api/test-run", async (req, res) => {
   try {
     const { rawInput, refinedPrompt } = req.body;
-    if (!apiKey) return res.status(500).json({ error: "API Key missing." });
+    if (!apiKey && !fallbackApiKey) return res.status(500).json({ error: "API Key missing." });
 
-    const noviceRes = await ai.models.generateContent({
+    const noviceRes = await callGemini({
       model: "gemini-2.5-flash",
       contents: `Answer briefly: ${rawInput}`,
       config: { systemInstruction: "Basic AI helper." }
     });
 
-    const refinedRes = await ai.models.generateContent({
+    const refinedRes = await callGemini({
       model: "gemini-2.5-flash",
       contents: refinedPrompt
     });

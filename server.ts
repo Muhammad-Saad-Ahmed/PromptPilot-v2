@@ -14,6 +14,9 @@ app.use(express.json());
 
 // Initialize GoogleGenAI client using secure backend-only GEMINI_API_KEY
 const apiKey = process.env.GEMINI_API_KEY;
+const fallbackApiKey = process.env.FALLBACK_GEMINI_API_KEY;
+const fallbackModel = process.env.FALLBACK_GEMINI_MODEL || "gemini-1.5-flash-lite";
+
 if (!apiKey) {
   console.warn("Warning: GEMINI_API_KEY is not defined in environment variables. Gemini features may fail.");
 }
@@ -22,6 +25,31 @@ if (!apiKey) {
 const ai = new GoogleGenAI({
   apiKey: apiKey || "",
 });
+
+const fallbackAi = fallbackApiKey ? new GoogleGenAI({
+  apiKey: fallbackApiKey,
+}) : null;
+
+// Helper to call Gemini with Fallback Logic
+async function callGemini(params: any) {
+  try {
+    if (!apiKey) throw new Error("Primary API Key missing");
+    return await ai.models.generateContent(params);
+  } catch (error: any) {
+    const isQuotaError = error.message?.includes("429") || 
+                         error.message?.includes("quota") || 
+                         error.status === 429;
+    
+    if (isQuotaError && fallbackAi) {
+      console.warn(`[FALLBACK] Primary API Quota Exceeded. Switching to model: ${fallbackModel}`);
+      return await fallbackAi.models.generateContent({
+        ...params,
+        model: fallbackModel
+      });
+    }
+    throw error;
+  }
+}
 
 // Middleware to log API requests with custom timestamps for debug operations
 app.use((req, res, next) => {
@@ -95,7 +123,7 @@ Generate the JSON response matching the specifications. Keep the tone friendly, 
 
     console.log(`Generating prompt for input: "${rawInput.substring(0, 50)}..."`);
 
-    const response = await ai.models.generateContent({
+    const response = await callGemini({
       model: "gemini-2.0-flash",
       contents: userPrompt,
       config: {
@@ -207,7 +235,7 @@ app.post("/api/test-run", async (req, res) => {
 
     // STEP 1: Basic default helper setup
     const novicePrompt = `Please answer a student's simple question directly. Do not overthink, just answer like a basic bot. Question: "${rawInput}"`;
-    const noviceResponse = await ai.models.generateContent({
+    const noviceResponse = await callGemini({
       model: "gemini-2.0-flash",
       contents: novicePrompt,
       config: {
@@ -216,7 +244,7 @@ app.post("/api/test-run", async (req, res) => {
     });
 
     // STEP 2: Socratic refined pilot setup
-    const refinedResponse = await ai.models.generateContent({
+    const refinedResponse = await callGemini({
       model: "gemini-2.0-flash",
       contents: refinedPrompt,
     });
