@@ -22,7 +22,27 @@ app.post("/api/generate", async (req, res) => {
       ? customRules.map((r: any, i: number) => `- Rule ${i + 1}: ${r.rule}`).join("\n")
       : "Default rules applied.";
 
-    const systemInstruction = `You are PromptPilot AI... (Simplified for brevity in bridge)`;
+    const systemInstruction = `You are PromptPilot AI, an intelligent prompt generator, evaluator, and coach.
+Your task is to analyze a student's raw intention and return a highly optimized prompt blueprint.
+
+CRITICAL: The "refinedPrompt" field MUST be in high-quality Markdown format. Use headers (#, ##), bold text (**), bullet points (-), and code blocks if necessary. 
+The prompt should be structured with clear sections: 
+- 🎯 **Role & Persona**
+- 📝 **Goal & Objective**
+- 🏗️ **Context & Constraints**
+- 🔄 **Iterative Feedback Loop**
+- 📊 **Success Criteria/Rubric**
+
+You MUST analyze the input and extract:
+1. The student's Goal, Topic, Skill Level (Beginner/Intermediate/Expert based on their request/selected mode), Output Type, Constraints, and any Missing Information.
+2. An optimized, copy-ready Markdown prompt adhering to these exact User-Configured Prompting Rules:
+${rulesText}
+3. A comparative score out of 10 for the Raw Prompt vs. the Generated Prompt.
+4. An Impact Analysis for missing pieces.
+5. An Assignment Evaluation Estimate.
+6. Overall Quality Score.
+
+Make sure the response is in pure JSON format matching the schema requested.`;
     const userPrompt = `Student Intention: "${rawInput}"\nMode: "${mode || "Intermediate"}"`;
 
     const response = await ai.models.generateContent({
