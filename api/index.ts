@@ -26,7 +26,7 @@ app.post("/api/generate", async (req, res) => {
     const userPrompt = `Student Intention: "${rawInput}"\nMode: "${mode || "Intermediate"}"`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       contents: userPrompt,
       config: {
         systemInstruction: `Analyze and return JSON: goal, topic, skillLevel, outputType, constraints, missingInformation, refinedPrompt, qualityScore, metrics, impacts, assignmentEvaluation. Rules: ${rulesText}`,
@@ -48,13 +48,13 @@ app.post("/api/test-run", async (req, res) => {
     if (!apiKey) return res.status(500).json({ error: "API Key missing." });
 
     const noviceRes = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       contents: `Answer briefly: ${rawInput}`,
       config: { systemInstruction: "Basic AI helper." }
     });
 
     const refinedRes = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       contents: refinedPrompt
     });
 
